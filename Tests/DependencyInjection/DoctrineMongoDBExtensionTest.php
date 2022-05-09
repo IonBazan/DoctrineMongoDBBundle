@@ -6,9 +6,12 @@ namespace Doctrine\Bundle\MongoDBBundle\Tests\DependencyInjection;
 
 use Doctrine\Bundle\MongoDBBundle\DependencyInjection\DoctrineMongoDBExtension;
 use Doctrine\Bundle\MongoDBBundle\Tests\DependencyInjection\Fixtures\Bundles\DocumentListenerBundle\EventListener\TestAttributeListener;
+use Doctrine\Common\EventManager;
+use Doctrine\ODM\MongoDB\DocumentManager;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Messenger\DoctrineClearEntityManagerWorkerSubscriber;
 use Symfony\Component\DependencyInjection\Alias;
+use Symfony\Component\DependencyInjection\Compiler\ResolveChildDefinitionsPass;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
@@ -76,6 +79,11 @@ class DoctrineMongoDBExtensionTest extends TestCase
         $extension = new DoctrineMongoDBExtension();
         $container->registerExtension($extension);
 
+        $container->register(TestAttributeListener::class, TestAttributeListener::class)
+            ->setAutowired(true)
+            ->setAutoconfigured(true)
+            ->setPublic(false);
+
         $extension->load([
             [
                 'connections' => ['default' => []],
@@ -86,12 +94,8 @@ class DoctrineMongoDBExtensionTest extends TestCase
                 ],
             ],
         ], $container);
-
-        $container->register(TestAttributeListener::class, TestAttributeListener::class)
-            ->setAutowired(true)
-            ->setAutoconfigured(true)
-            ->setPublic(false);
         $container->setAlias('test_alias__' . TestAttributeListener::class, new Alias(TestAttributeListener::class, true));
+        $container->getDefinition('doctrine_mongodb.odm.connection.event_manager')->setPublic(true);
         $container->compile();
 
         $listenerDefinition = $container->getDefinition('test_alias__' . TestAttributeListener::class);
@@ -101,9 +105,15 @@ class DoctrineMongoDBExtensionTest extends TestCase
                 'event' => 'prePersist',
                 'method' => 'onPrePersist',
                 'lazy' => true,
-                'connection' => 'test',
+                'connection' => 'default',
             ],
         ], $listenerDefinition->getTag('doctrine_mongodb.odm.event_listener'));
+//        dd(array_keys($container->getDefinitions()));
+        $em = $container->get('doctrine_mongodb.odm.default_connection.event_manager');
+        self::assertInstanceOf(EventManager::class, $em);
+        dd($em);
+        dd($em->getListeners());
+        dd($container->getDefinitions());
     }
 
     /** @param string|string[] $bundles */
